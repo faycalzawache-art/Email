@@ -1,6 +1,0 @@
-kivy
-requests
-beautifulsoup4
-plyer
-urllib3
-chardet
