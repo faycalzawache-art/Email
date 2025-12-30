@@ -1,0 +1,67 @@
+name: Flet Android Production Build
+
+on:
+  push:
+    branches: [ master, main ]
+  workflow_dispatch:
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Tools & Flet
+        run: |
+          python -m pip install --upgrade pip
+          pip install flet
+          # تثبيت المتطلبات إذا وجد الملف، مع تجاهل الأخطاء غير الحرجة
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          flutter-version: '3.22.2'
+
+      - name: Auto-Accept Android Licenses
+        run: |
+          # هذه الخطوة تحل مشكلة توقف البناء بسبب التراخيص
+          mkdir -p $ANDROID_HOME/licenses
+          echo "24333f8a63b6825ea9c5573f43592f4d23b1622e" > $ANDROID_HOME/licenses/android-sdk-license
+          echo "8933bad161af4178b1185d1a37fbf41ea5269c55" > $ANDROID_HOME/licenses/android-sdk-license
+          yes | sdkmanager --licenses || true
+
+      - name: Flet Build APK
+        run: |
+          # فحص إذا كان الملف الأساسي موجوداً لتجنب الـ Exit Code 1
+          if [ ! -f main.py ]; then echo "Error: main.py not found in root!"; exit 1; fi
+          
+          flutter config --no-analytics
+          # البناء مع تنظيف الذاكرة المؤقتة
+          flet build apk --verbose
+
+      - name: Check and Move APK
+        run: |
+          # التأكد من وجود المجلد قبل محاولة الرفع
+          mkdir -p output/
+          find build/apk -name "*.apk" -exec cp {} output/app-release.apk \;
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: flet-android-app
+          path: output/app-release.apk
+          if-no-files-found: error
